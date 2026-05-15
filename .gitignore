@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.swp
+.DS_Store
+.android-tools/
+downloads/
+android/.gradle/
+android/app/build/
+*.apk
+*.aab
+*.keystore
+*.jks
