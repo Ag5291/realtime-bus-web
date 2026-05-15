@@ -1,0 +1,58 @@
+定位结果（来自 ctf.apk 反编译）
+
+1) 实时公交入口
+- 字符串资源：res/values/strings.xml 里 `home_center_rv_item_realtime_public_transportation` = “实时公交”。
+- 点击处理逻辑在：ctf_apktool/smali_classes5/com/whpe/qrcode/shanxi/yangquanxing/view/fragment/home/HomeFragment.smali
+  关键常量：
+  https://apph5.ibuscloud.com/index.html?curPage=realTimeListPage&city=140300&appSource=com.ibuscloud.yangquanbus&userLng=
+  并拼接 userLng/userLat 后通过 WebView 打开。
+
+2) 打开方式
+- 目标 Activity：com.whpe.qrcode.shanxi.yangquanxing.view.activity.webview.TitleContentWebViewActivity
+- 通过 Bundle/Intent extra 传参：
+  - `title` = “实时公交”
+  - `content` = 上面的 H5 URL
+- 该 Activity 内部最终执行：WebView.loadUrl(content)
+
+3) 说明
+- 这个“实时公交页面”不是打包在 APK 的 assets 里，而是线上 H5（题面所说“部署在 api 网页上”属实）。
+- APK 里能提取到的关键内容是：H5 入口 URL、以及 H5 站点使用的接口域名/路径（在打包 JS 里）。
+
+离线抓取的页面内容（已下载到本机）
+
+目录：/home/liushijie/下载/ibuscloud_realtime
+已抓取：
+- index.html
+- styles/vendors.d85e946f967e27eac8e7.css
+- styles/main.d85e946f967e27eac8e7.css
+- js/runtime-main.0b9ecd23.js
+- js/vendors.9695147f.js
+- js/main.f824d62c.js
+- imgs/first.png
+- imgs/second.png
+- imgs/third.png
+- imgs/绿行杭州碳普惠.png
+- assets/realTimePage/ 目录下与实时公交页面相关的图片资源（wodeweizhi.png、铃铛、时刻表等）
+
+接口提取（来自打包 JS 的接口配置）
+
+接口 base（生产环境）：https://app.ibuscloud.com/
+接口 base（测试环境）：https://apptest.ibuscloud.com/
+
+已从 js/main.f824d62c.js 中提取到的 URI 列表见：
+- /home/liushijie/下载/ibuscloud_realtime/api_uris.txt
+
+其中与“实时公交”最相关的接口（按名称）：
+- v2/bus/getNewBusPositionByRouteNo
+- v2/bus/getNewNextBusByRouteNoStopId
+- v2/bus/getBusPositionByRouteIdAndShowPosHz
+- v2/bus/getNextBusByStopId
+- v2/bus/getNextBusByRouteStopId
+- v2/bus/findRouteByName
+- v2/bus/findStopByName
+- v1/bus/getBusPlanTimeByRouteNo
+- v2/bus/getNearbyStops
+- v2/bus/getNearbyStopRoutesNew
+
+补充：实时公交 H5 页面路由
+- H5 通过 query 参数 `curPage=realTimeListPage` 渲染页面（单页应用）。
