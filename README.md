@@ -1,7 +1,4 @@
 # Realtime Bus Web
-
-从 `ctf.apk` 和线上 H5 提取整理出的“实时公交”本地可运行网页。
-
 ## 结构
 
 - `index.html`: 实时公交主页面
