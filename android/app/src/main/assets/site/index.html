@@ -1,0 +1,463 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta name="theme-color" content="#000000"><title>实时公交</title><script>(function () {
+        var customLocationKey = 'ibus_custom_location';
+        var customLocation = null;
+        try {
+          customLocation = JSON.parse(localStorage.getItem(customLocationKey) || 'null');
+        } catch (err) {
+          customLocation = null;
+        }
+        window.__IBUS_CUSTOM_LOCATION = customLocation;
+        var url = new URL(window.location.href);
+        var defaults = {
+          curPage: 'realTimeListPage',
+          city: '140300',
+          appSource: 'com.ibuscloud.yangquanbus',
+          pageTitle: '实时公交'
+        };
+        var changed = false;
+        Object.keys(defaults).forEach(function (key) {
+          if (!url.searchParams.get(key)) {
+            url.searchParams.set(key, defaults[key]);
+            changed = true;
+          }
+        });
+        if (customLocation && customLocation.lng && customLocation.lat) {
+          [['userLng', customLocation.lng], ['userLat', customLocation.lat], ['longitude', customLocation.lng], ['latitude', customLocation.lat], ['customLocationName', customLocation.name || '自定义位置'], ['locationMode', 'custom']].forEach(function (entry) {
+            if (url.searchParams.get(entry[0]) !== String(entry[1])) {
+              url.searchParams.set(entry[0], entry[1]);
+              changed = true;
+            }
+          });
+        }
+        if (!customLocation && url.searchParams.get('locationMode') === 'custom') {
+          ['userLng', 'userLat', 'longitude', 'latitude', 'customLocationName', 'locationMode'].forEach(function (key) {
+            if (url.searchParams.has(key)) {
+              url.searchParams.delete(key);
+              changed = true;
+            }
+          });
+        }
+        if (changed) {
+          window.location.replace(url.toString());
+        }
+      }());</script><script>if (localStorage && localStorage.isWebp) {
+            document
+                .getElementsByTagName('html')[0]
+                .setAttribute('crimson-webp', 'true');
+        }</script><script>"use strict";
+
+//微信重置字体大小
+function handleFontSize() {
+  if (typeof WeixinJSBridge !== "undefined" && typeof WeixinJSBridge.invoke == "function") {
+    WeixinJSBridge.invoke('setFontSizeCallback', {
+      'fontSize': 0
+    });
+    WeixinJSBridge.on('menu:setfont', function () {
+      WeixinJSBridge.invoke('setFontSizeCallback', {
+        'fontSize': 0
+      });
+    });
+  } else {
+    document.addEventListener("WeixinJSBridgeReady", handleFontSize, false);
+  }
+}
+handleFontSize();
+window.onload = function () {
+  document.body.style.cssText = "-webkit-text-size-adjust: 100% !important;";
+};</script><script>"use strict";
+
+!function (e, i) {
+  var t = e.documentElement,
+    // 直接使用设备真实 DPR（限制最大值为 3）
+    a = Math.min(i.devicePixelRatio || 1, 3),
+    m = "orientationchange" in window ? "orientationchange" : "resize";
+  t.dataset.dpr = a;
+
+  // 设置设计稿宽度和最大缩放比例
+  var dw = window['designWidth'] || 750;
+  var maxScale = 1.5; // 限制最大缩放比例为 1.5 倍
+
+  // 查找或创建viewport meta标签
+  for (var d, l, c = !1, o = e.getElementsByTagName("meta"), r = 0; r < o.length; r++) {
+    l = o[r], "viewport" == l.name && (c = !0, d = l);
+  }
+  if (c) {
+    d.content = "width=device-width,initial-scale=1.0,maximum-scale=1.0, minimum-scale=1.0,user-scalable=no";
+  } else {
+    var o = e.createElement("meta");
+    o.name = "viewport", o.content = "width=device-width,initial-scale=1.0,maximum-scale=1.0, minimum-scale=1.0,user-scalable=no", t.firstElementChild.appendChild(o);
+  }
+
+  // 动态计算根字体大小
+  var s = function s() {
+    var e = t.clientWidth;
+    // 计算缩放比例并限制最大值
+    var scale = Math.min(e / dw, maxScale);
+    // 统一使用 100 作为基准系数（避免平板使用过大的基准值）
+    t.style.fontSize = 100 * scale + "px";
+    // 保存缩放比例供其他地方使用
+    window.remScale = scale;
+  };
+  s(); // 初始化执行
+  e.addEventListener && i.addEventListener(m, s, !1); // 监听窗口变化
+}(document, window);</script><script>"use strict";
+
+function getUrlParam(name) {
+  var search = window.location.search;
+  var matched = search.slice(1).match(new RegExp('(^|&)' + name + '=([^&]*)(&|$)', 'i'));
+  return search.length ? matched && matched[2] : null;
+}</script><script>(function () {
+  var proxyPrefix = '/__ibus_proxy__/';
+  var customLocationKey = 'ibus_custom_location';
+  var mapScriptSrc = 'https://webapi.amap.com/maps?v=2.0&key=2435483d5982c8ed55fe92b94eaf4e8c&plugin=AMap.Geocoder,AMap.Geolocation';
+  function getCustomLocation() {
+    try {
+      var data = window.__IBUS_CUSTOM_LOCATION || JSON.parse(localStorage.getItem(customLocationKey) || 'null');
+      if (data && data.lng && data.lat) {
+        return {
+          lng: Number(data.lng),
+          lat: Number(data.lat),
+          name: data.name || '自定义位置'
+        };
+      }
+    } catch (err) {}
+    return null;
+  }
+  var shouldProxyIbusRequests = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+  function rewriteUrl(input) {
+    if (!shouldProxyIbusRequests) return input;
+    if (!input || typeof input !== 'string') return input;
+    var absolute = input.indexOf('//') === 0 ? window.location.protocol + input : input;
+    var matched = absolute.match(/^https?:\/\/([^/]+)\/(.*)$/i);
+    if (!matched) return input;
+    var host = matched[1];
+    if (host.indexOf('ibuscloud.com') === -1) return input;
+    return proxyPrefix + host + '/' + matched[2];
+  }
+  window.url_process = function (url) {
+    return rewriteUrl(url);
+  };
+  if (window.fetch) {
+    var rawFetch = window.fetch.bind(window);
+    window.fetch = function (input, init) {
+      if (typeof input === 'string') {
+        input = rewriteUrl(input);
+      } else if (window.Request && input instanceof Request) {
+        var rewritten = rewriteUrl(input.url);
+        if (rewritten !== input.url) {
+          input = new Request(rewritten, input);
+        }
+      }
+      return rawFetch(input, init);
+    };
+  }
+  function patchAmapGeolocation() {
+    var custom = getCustomLocation();
+    if (!custom || !window.AMap || window.AMap.__ibusGeolocationPatched) return;
+    var OriginalGeolocation = window.AMap.Geolocation;
+    if (typeof OriginalGeolocation !== 'function') return;
+    window.AMap.Geolocation = function (options) {
+      var instance = new OriginalGeolocation(options);
+      instance.getCurrentPosition = function (callback) {
+        callback('complete', {
+          position: {
+            lng: custom.lng,
+            lat: custom.lat
+          }
+        });
+      };
+      return instance;
+    };
+    window.AMap.Geolocation.prototype = OriginalGeolocation.prototype;
+    window.AMap.__ibusGeolocationPatched = true;
+  }
+  var headAppendChild = document.head.appendChild.bind(document.head);
+  document.head.appendChild = function (node) {
+    if (node && node.tagName === 'SCRIPT' && node.src && node.src.indexOf('webapi.amap.com') !== -1) {
+      var originalOnload = node.onload;
+      node.onload = function () {
+        patchAmapGeolocation();
+        if (typeof originalOnload === 'function') {
+          return originalOnload.apply(this, arguments);
+        }
+      };
+    }
+    return headAppendChild(node);
+  };
+  function ensureAmap() {
+    return new Promise(function (resolve, reject) {
+      if (window.AMap) {
+        patchAmapGeolocation();
+        resolve(window.AMap);
+        return;
+      }
+      var existing = document.querySelector('script[data-ibus-amap="1"]');
+      if (existing) {
+        existing.addEventListener('load', function () {
+          patchAmapGeolocation();
+          resolve(window.AMap);
+        }, { once: true });
+        existing.addEventListener('error', reject, { once: true });
+        return;
+      }
+      var script = document.createElement('script');
+      script.src = mapScriptSrc;
+      script.dataset.ibusAmap = '1';
+      script.onload = function () {
+        patchAmapGeolocation();
+        resolve(window.AMap);
+      };
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+  function createLocationControls() {
+    var style = document.createElement('style');
+    style.textContent = '.ibus-location-entry{position:fixed;right:.24rem;bottom:1.52rem;z-index:1002;display:none;align-items:center;justify-content:center;width:1rem;height:1rem;border:0;border-radius:50%;background:linear-gradient(180deg,#ffffff 0%,#eef7ff 100%);box-shadow:0 .08rem .24rem rgba(19,89,149,.18);padding:0}.ibus-location-entry::before{content:\"\";position:absolute;inset:.03rem;border:.02rem solid rgba(0,142,255,.16);border-radius:50%}.ibus-location-entry .icon{position:relative;width:.5rem;height:.66rem;background:url(\"/assets/realTimePage/wodeweizhi.png\") no-repeat center center/100% 100%}.ibus-location-entry .badge{position:absolute;right:.12rem;top:.12rem;width:.18rem;height:.18rem;border-radius:50%;background:#d8e4ef;border:.03rem solid #fff;box-sizing:border-box}.ibus-location-entry[data-active=\"custom\"] .badge{background:#008eff;box-shadow:0 0 0 .03rem rgba(0,142,255,.18)}.ibus-location-entry[data-page=\"sub\"]{bottom:1.18rem}.ibus-location-mask{position:fixed;inset:0;background:rgba(20,42,66,.36);z-index:1003;display:none}.ibus-location-sheet{position:fixed;left:50%;bottom:.32rem;transform:translateX(-50%);width:calc(100vw - .48rem);max-width:7.02rem;background:#fff;border-radius:.32rem;box-shadow:0 .16rem .48rem rgba(13,55,98,.18);z-index:1004;display:none;padding:.32rem}.ibus-location-title{font-size:.34rem;font-weight:700;color:#333;line-height:.48rem}.ibus-location-desc{margin-top:.12rem;font-size:.26rem;color:#6f7f90;line-height:.38rem}.ibus-location-row{display:flex;gap:.16rem;margin-top:.24rem}.ibus-location-btn{flex:1;border:0;border-radius:.24rem;padding:.24rem 0;font-size:.28rem;font-weight:700}.ibus-location-btn.primary{background:#008eff;color:#fff}.ibus-location-btn.secondary{background:#eef6ff;color:#008eff}.ibus-location-map{position:relative;width:100%;height:4.2rem;border-radius:.24rem;overflow:hidden;margin-top:.24rem;background:#eef4fa}.ibus-location-crosshair{position:absolute;left:50%;top:50%;width:.44rem;height:.44rem;transform:translate(-50%,-50%);pointer-events:none;z-index:2}.ibus-location-crosshair::before,.ibus-location-crosshair::after{content:\"\";position:absolute;left:50%;top:50%;background:#008eff;transform:translate(-50%,-50%)}.ibus-location-crosshair::before{width:.06rem;height:.44rem;border-radius:.03rem}.ibus-location-crosshair::after{width:.44rem;height:.06rem;border-radius:.03rem}.ibus-location-crosshair span{position:absolute;left:50%;top:50%;width:.18rem;height:.18rem;border:.04rem solid #fff;background:#008eff;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 .02rem rgba(0,142,255,.35)}.ibus-location-name{margin-top:.16rem;font-size:.26rem;color:#333;line-height:.38rem;min-height:.38rem}.ibus-location-actions{display:flex;gap:.16rem;margin-top:.24rem}.ibus-location-tag{margin-top:.12rem;display:inline-flex;align-items:center;gap:.08rem;font-size:.24rem;color:#008eff;background:#eef6ff;border-radius:999px;padding:.08rem .18rem}.ibus-location-sheet[data-mode="picker"] .ibus-location-row{display:none}.ibus-location-sheet[data-mode=""] .ibus-location-map,.ibus-location-sheet[data-mode=""] .ibus-location-name,.ibus-location-sheet[data-mode=""] .ibus-location-actions{display:none}';
+    document.head.appendChild(style);
+    var responsiveStyle = document.createElement('style');
+    responsiveStyle.textContent = '@media (max-width: 420px){.realTimePage .titleInfo{width:auto;padding:.16rem .16rem 0;margin-top:1.1rem}.realTimePage .titleInfo .lineTimeSchedule{width:calc(100vw - .32rem);max-width:3.4rem;min-height:.48rem;height:auto;line-height:.28rem;font-size:.22rem;white-space:normal;align-items:center;gap:.08rem;flex-wrap:wrap}.realTimePage .titleInfo .lineTimeSchedule .lineTimeScheduleIcon,.realTimePage .titleInfo .lineTimeSchedule .lineTimeScheduleArrow{flex:0 0 auto}.routeScheduleBox{width:100vw;max-height:72vh;padding:.24rem .16rem .2rem}.routeScheduleBox .header .lineName{font-size:.32rem;line-height:.42rem;margin-bottom:.16rem;padding-right:.56rem}.routeScheduleBox .header .titleBox{width:100%;height:1rem;background-size:100% 100%}.routeScheduleBox .itemList{width:100%;overflow-x:auto;overflow-y:auto;-webkit-overflow-scrolling:touch}.routeScheduleBox .itemList .itemStartEnd .itemStartName,.routeScheduleBox .itemList .itemStartEnd .itemEndName{width:50%;min-width:3rem;height:auto;min-height:.76rem;padding:.08rem .1rem;font-size:.26rem;line-height:.34rem;box-sizing:border-box}.routeScheduleBox .itemList .itemInfo{width:100%;min-width:6rem}.routeScheduleBox .itemList .itemInfo .itemStartInfo,.routeScheduleBox .itemList .itemInfo .itemEndInfo{width:50%;min-width:3rem;height:auto;min-height:.62rem}.routeScheduleBox .itemList .itemInfo .itemStartInfo .itemStartIndex,.routeScheduleBox .itemList .itemInfo .itemEndInfo .itemEndIndex,.routeScheduleBox .itemList .itemInfo .itemStartInfo .itemStartTime,.routeScheduleBox .itemList .itemInfo .itemEndInfo .itemEndTime{font-size:.24rem;line-height:.3rem;padding-left:.08rem}.realTimeMapPageBox{position:absolute;inset:0;overflow:hidden;background:#eef4fa}.realTimeMapPageBox .mapBox{position:absolute;inset:0;width:100vw!important;height:100vh!important;z-index:0}.realTimeMapPageBox .userPos,.realTimeMapPageBox .updateBus,.realTimeMapPageBox .changeDis,.realTimeMapPageBox .stationsInfo,.realTimeMapPageBox .stationsInfoGray,.realTimeMapPageBox .realTimeMapPageBoxBack{z-index:20}}';
+    document.head.appendChild(responsiveStyle);
+    var fixedLayoutStyle = document.createElement('style');
+    fixedLayoutStyle.textContent = '.realTimePage .titleInfo .lineStation{min-width:0;gap:.12rem}.realTimePage .titleInfo .lineStation .lineDir{min-width:0;flex:1;align-items:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.realTimePage .titleInfo .lineStation .changedir{flex:0 0 1.24rem;width:1.24rem;min-width:1.24rem;box-sizing:border-box;overflow:hidden;justify-content:center;gap:.08rem}.realTimePage .titleInfo .lineStation .changedir_img{flex:0 0 .28rem}.realTimePage .titleInfo .lineStation .changedir_text{flex:0 0 auto;width:auto;min-width:.48rem;white-space:nowrap;line-height:.33rem}.realTimePage .busList .item .itemStationBox .itemActionBox .itemNear{box-sizing:border-box;flex:0 0 auto;min-width:.38rem;width:.38rem;min-height:1.25rem;height:auto;line-height:.28rem;white-space:normal;word-break:keep-all;overflow:hidden;text-orientation:upright;-webkit-text-orientation:upright}.realTimeMapPageBox{width:100vw!important;height:100vh!important;position:absolute!important;inset:0!important;overflow:hidden;background:#eef4fa}.realTimeMapPageBox .mapBox{width:100vw!important;height:100vh!important;position:absolute!important;inset:0!important;overflow:hidden;background:#eef4fa}.realTimeMapPageBox .userPos,.realTimeMapPageBox .updateBus,.realTimeMapPageBox .changeDis,.realTimeMapPageBox .stationsInfo,.realTimeMapPageBox .stationsInfoGray,.realTimeMapPageBox .realTimeMapPageBoxBack{z-index:20}@media (max-width: 560px){.realTimePage .titleInfo .lineStation .changedir{width:1.24rem;height:.5rem}.realTimePage .titleInfo .lineStation .changedir_text{font-size:.24rem}.realTimePage .busList .item .itemStationBox .itemActionBox .itemNear{font-size:.24rem;letter-spacing:0}}';
+    document.head.appendChild(fixedLayoutStyle);
+    function refreshAmapLayout() {
+      var page = document.querySelector('.realTimeMapPageBox');
+      if (!page) return;
+      var mapBox = page.querySelector('.mapBox');
+      [page, mapBox].forEach(function (node) {
+        if (!node) return;
+        node.style.width = '100vw';
+        node.style.height = '100vh';
+      });
+    }
+    var entry = document.createElement('button');
+    entry.type = 'button';
+    entry.className = 'ibus-location-entry';
+    entry.setAttribute('aria-label', '位置切换');
+    entry.innerHTML = '<span class="icon"></span><span class="badge"></span>';
+    var mask = document.createElement('div');
+    mask.className = 'ibus-location-mask';
+    var sheet = document.createElement('div');
+    sheet.className = 'ibus-location-sheet';
+    sheet.innerHTML = '<div class="ibus-location-title">切换定位位置</div><div class="ibus-location-desc">默认使用系统定位，也可以通过地图选点切换到任意位置查看附近公交。</div><div class="ibus-location-tag"></div><div class="ibus-location-row"><button type="button" class="ibus-location-btn secondary" data-action="system">使用系统定位</button><button type="button" class="ibus-location-btn primary" data-action="picker">地图选点</button></div><div class="ibus-location-map" id="ibus-custom-map"><div class="ibus-location-crosshair"><span></span></div></div><div class="ibus-location-name" id="ibus-custom-location-name"></div><div class="ibus-location-actions"><button type="button" class="ibus-location-btn secondary" data-action="cancel">取消</button><button type="button" class="ibus-location-btn primary" data-action="save">保存位置</button></div>';
+    document.body.appendChild(entry);
+    document.body.appendChild(mask);
+    document.body.appendChild(sheet);
+    var tag = sheet.querySelector('.ibus-location-tag');
+    var mapHost = sheet.querySelector('#ibus-custom-map');
+    var nameNode = sheet.querySelector('#ibus-custom-location-name');
+    var mapInstance = null;
+    var geocoder = null;
+    var currentSelection = null;
+    var geocoderReady = false;
+    function updateTag() {
+      var current = getCustomLocation();
+      entry.dataset.active = current ? 'custom' : 'system';
+      entry.title = current ? '当前使用自定义位置，点击可切换' : '点击切换位置';
+      tag.textContent = current ? '当前：' + current.name : '当前：系统定位';
+    }
+    function bindNativeTriggers() {
+      ['.changePosition'].forEach(function (selector) {
+        document.querySelectorAll(selector).forEach(function (node) {
+          if (node.dataset.ibusLocationBound === '1') return;
+          node.dataset.ibusLocationBound = '1';
+          node.title = '长按打开位置切换';
+          var pressTimer = 0;
+          var opened = false;
+          function clearPress() {
+            if (pressTimer) {
+              clearTimeout(pressTimer);
+              pressTimer = 0;
+            }
+          }
+          node.addEventListener('pointerdown', function () {
+            opened = false;
+            clearPress();
+            pressTimer = window.setTimeout(function () {
+              opened = true;
+              openSheet('picker');
+            }, 480);
+          });
+          ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (eventName) {
+            node.addEventListener(eventName, clearPress);
+          });
+          node.addEventListener('contextmenu', function (event) {
+            event.preventDefault();
+            clearPress();
+            openSheet('picker');
+          });
+          node.addEventListener('click', function (event) {
+            if (opened) {
+              event.preventDefault();
+              event.stopPropagation();
+              opened = false;
+            }
+          }, true);
+        });
+      });
+    }
+    function syncEntryVisibility() {
+      bindNativeTriggers();
+      var page = '';
+      if (document.querySelector('.realTimeListPageBox')) page = 'list';
+      else if (document.querySelector('.stopDetailsPage,.moreRoutePage,.moreStopPage,.moreStationPage')) page = 'sub';
+      else if (document.querySelector('.realTimePage')) page = 'detail';
+      else if (document.querySelector('.realTimeMapPageBox')) page = 'map';
+      entry.dataset.page = page;
+      var standaloneVisible = page === 'list' || page === 'sub';
+      entry.style.display = standaloneVisible ? 'inline-flex' : 'none';
+    }
+    function closeSheet() {
+      mask.style.display = 'none';
+      sheet.style.display = 'none';
+      sheet.dataset.mode = '';
+    }
+    function updateSelection(lng, lat, name) {
+      currentSelection = {
+        lng: Number(Number(lng).toFixed(6)),
+        lat: Number(Number(lat).toFixed(6)),
+        name: name || '已选位置'
+      };
+      nameNode.textContent = currentSelection.name + '（' + currentSelection.lng + ', ' + currentSelection.lat + '）';
+      if (geocoderReady && geocoder && typeof geocoder.getAddress === 'function') {
+        geocoder.getAddress([currentSelection.lng, currentSelection.lat], function (status, result) {
+          if (status === 'complete' && result && result.regeocode) {
+            currentSelection.name = result.regeocode.formattedAddress || currentSelection.name;
+            nameNode.textContent = currentSelection.name + '（' + currentSelection.lng + ', ' + currentSelection.lat + '）';
+          }
+        });
+      }
+    }
+    function initGeocoder(AMap) {
+      if (geocoder || geocoderReady) return;
+      if (typeof AMap.Geocoder === 'function') {
+        geocoder = new AMap.Geocoder({ city: '140300' });
+        geocoderReady = true;
+        return;
+      }
+      if (typeof AMap.plugin === 'function') {
+        AMap.plugin(['AMap.Geocoder'], function () {
+          if (typeof AMap.Geocoder === 'function') {
+            geocoder = new AMap.Geocoder({ city: '140300' });
+            geocoderReady = true;
+          }
+        });
+      }
+    }
+    function openSheet(mode) {
+      updateTag();
+      mask.style.display = 'block';
+      sheet.style.display = 'block';
+      sheet.dataset.mode = mode || '';
+      if (mode === 'picker') {
+        ensureAmap().then(function (AMap) {
+          if (!mapInstance) {
+            mapInstance = new AMap.Map(mapHost, {
+              resizeEnable: true,
+              zoom: 15,
+              center: [113.580519, 37.856971],
+              dragEnable: true,
+              zoomEnable: true
+            });
+            initGeocoder(AMap);
+            mapInstance.on('moveend', function () {
+              if (sheet.dataset.mode !== 'picker') return;
+              var center = mapInstance.getCenter && mapInstance.getCenter();
+              if (!center) return;
+              updateSelection(center.lng, center.lat, '地图中心位置');
+            });
+            mapInstance.on('zoomend', function () {
+              if (sheet.dataset.mode !== 'picker') return;
+              var center = mapInstance.getCenter && mapInstance.getCenter();
+              if (!center) return;
+              updateSelection(center.lng, center.lat, '地图中心位置');
+            });
+          }
+          initGeocoder(AMap);
+          var current = getCustomLocation();
+          currentSelection = current || {
+            lng: Number(new URL(window.location.href).searchParams.get('userLng') || 113.580519),
+            lat: Number(new URL(window.location.href).searchParams.get('userLat') || 37.856971),
+            name: current && current.name ? current.name : '阳泉市政府附近'
+          };
+          mapInstance.setCenter([currentSelection.lng, currentSelection.lat]);
+          mapInstance.setZoom(15);
+          if (typeof mapInstance.resize === 'function') {
+            setTimeout(function () {
+              mapInstance.resize();
+            }, 50);
+          }
+          updateSelection(currentSelection.lng, currentSelection.lat, currentSelection.name);
+          nameNode.textContent = '拖动地图，让准星对准目标位置后保存';
+        }).catch(function (err) {
+          console.error('location picker init failed', err);
+          nameNode.textContent = '地图初始化失败，请关闭后重试';
+        });
+      }
+    }
+    entry.addEventListener('click', function () {
+      openSheet('');
+    });
+    mask.addEventListener('click', closeSheet);
+    sheet.addEventListener('click', function (event) {
+      var action = event.target && event.target.getAttribute('data-action');
+      if (!action) return;
+      if (action === 'cancel') {
+        closeSheet();
+        return;
+      }
+      if (action === 'system') {
+        localStorage.removeItem(customLocationKey);
+        window.__IBUS_CUSTOM_LOCATION = null;
+        var url = new URL(window.location.href);
+        ['userLng', 'userLat', 'longitude', 'latitude', 'customLocationName', 'locationMode'].forEach(function (key) {
+          url.searchParams.delete(key);
+        });
+        window.location.replace(url.toString());
+        return;
+      }
+      if (action === 'picker') {
+        openSheet('picker');
+        return;
+      }
+      if (action === 'save' && currentSelection) {
+        localStorage.setItem(customLocationKey, JSON.stringify(currentSelection));
+        window.__IBUS_CUSTOM_LOCATION = currentSelection;
+        var nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set('userLng', currentSelection.lng);
+        nextUrl.searchParams.set('userLat', currentSelection.lat);
+        nextUrl.searchParams.set('longitude', currentSelection.lng);
+        nextUrl.searchParams.set('latitude', currentSelection.lat);
+        nextUrl.searchParams.set('customLocationName', currentSelection.name || '自定义位置');
+        nextUrl.searchParams.set('locationMode', 'custom');
+        window.location.replace(nextUrl.toString());
+      }
+    });
+    new MutationObserver(function () {
+      syncEntryVisibility();
+      refreshAmapLayout();
+      setTimeout(refreshAmapLayout, 80);
+      setTimeout(refreshAmapLayout, 300);
+    }).observe(document.body, { childList: true, subtree: true });
+    window.addEventListener('resize', function () {
+      refreshAmapLayout();
+    }, { passive: true });
+    window.addEventListener('orientationchange', function () {
+      setTimeout(refreshAmapLayout, 120);
+    }, { passive: true });
+    window.addEventListener('load', function () {
+      setTimeout(refreshAmapLayout, 120);
+      setTimeout(refreshAmapLayout, 800);
+    }, { once: true });
+    setTimeout(refreshAmapLayout, 300);
+    updateTag();
+    syncEntryVisibility();
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    patchAmapGeolocation();
+    createLocationControls();
+  });
+}());</script><script src="https://res.wx.qq.com/open/js/jweixin-1.3.2.js"></script><link href="./styles/vendors.d85e946f967e27eac8e7.css" rel="stylesheet"><link href="./styles/main.d85e946f967e27eac8e7.css" rel="stylesheet"></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div><script>window._AMapSecurityConfig = {
+            securityJsCode: 'ad059e98970941750bc18663e623b073',
+        }</script><script src="./js/runtime-main.0b9ecd23.js" crossorigin="anonymous"></script><script src="./js/vendors.9695147f.js" crossorigin="anonymous"></script><script src="./js/main.f824d62c.js" crossorigin="anonymous"></script></body></html>
